@@ -57,7 +57,6 @@ namespace simple_local_planner{
 		goal_reached_ = false;
 
     	//For pure-pursuit
-    xy_reach_ = false;
     running_ = false;
 		new_plan_ = false;
 		wp_index_ = -1;	
@@ -277,30 +276,6 @@ namespace simple_local_planner{
   {
 		goal_reached_ = false;
 
-    // Check plan size
-    if(new_plan.empty())
-    {
-      running_ = false;
-      wp_index_ = -1;
-      xy_reach_ = false;
-      ROS_WARN("New local plan size = 0!");
-      return true;
-    }
-
-    double dist = 10.0;
-    if(!global_plan_.empty())
-    {
-      double diff_x,diff_y;
-      diff_x = global_plan_.back().pose.position.x - new_plan.back().pose.position.x;
-      diff_y = global_plan_.back().pose.position.y - new_plan.back().pose.position.y;
-      dist = sqrt(diff_x*diff_x + diff_y*diff_y);
-    }
-
-    if(dist > this->goal_lin_tolerance_ * 5)
-    {
-      xy_reach_ = false;
-    }
-
 		// Copy new plan 
 		global_plan_.clear();
 		global_plan_.resize(new_plan.size());
@@ -309,16 +284,25 @@ namespace simple_local_planner{
 			global_plan_[i] = new_plan[i];
 		}
 		
+		// Check plan size
+		if(global_plan_.size() == 0)
+		{
+			running_ = false;
+			wp_index_ = -1;
+			ROS_WARN("New local plan size = 0!");
+			return true;
+		}
+		
 		// Set the way-point index to the first point of the path
 		wp_index_ = 0;
 		running_ = true;
 		new_plan_ = true;
-
+		
 		// Set plan goal point
 		geometry_msgs::PoseStamped& goal_pose = global_plan_[global_plan_.size()-1];
 		goal_x_ = goal_pose.pose.position.x;
 		goal_y_ = goal_pose.pose.position.y;
-    goal_t_ = tf::getYaw(goal_pose.pose.orientation);
+		goal_t_ = tf::getYaw(goal_pose.pose.orientation);
 		
 		// Set the plan starting point
 		geometry_msgs::PoseStamped& start_pose = global_plan_[0];
@@ -410,12 +394,7 @@ namespace simple_local_planner{
 
     double dist_goal = sqrt((rx-goal_x_)*(rx-goal_x_)+(ry-goal_y_)*(ry-goal_y_));
 	
-    if(dist_goal < goal_lin_tolerance_ ) //Check if we are close enough to the goal
-    {
-      xy_reach_ = true;
-    }
-
-    if(xy_reach_)
+    if(dist_goal < goal_lin_tolerance_) //Check if we are close enough to the goal
     {
       // Stop the robot
       vx = 0.0;
@@ -425,7 +404,6 @@ namespace simple_local_planner{
       {
         vt = 0.0;
         running_ = false;
-        xy_reach_ = false;
         goal_reached_ = true;
       }
       else
@@ -437,7 +415,7 @@ namespace simple_local_planner{
         else
           vt = -min_in_place_vel_th_;
       }
-
+		
       cmd_vel.linear.x = vx;
       cmd_vel.linear.y = vy;
       cmd_vel.linear.z = 0.0;

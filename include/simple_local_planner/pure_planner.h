@@ -206,7 +206,6 @@ namespace simple_local_planner {
       double goal_t_;
       int wp_index_;
       bool running_;
-      bool xy_reach_;
       double inscribed_radius_, circumscribed_radius_;
       bool goal_reached_;
 	  

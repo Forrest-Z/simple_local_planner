@@ -623,7 +623,7 @@ namespace simple_local_planner{
   }
 
   DijkstraPlanner::DijkstraPlanner(std::string name, costmap_2d::Costmap2D *costmap, std::string frame_id) :
-    costmap_(nullptr), initialized_(false), allow_unknown_(true), p_calc_(nullptr), planner_(nullptr), path_maker_(nullptr)
+    costmap_(nullptr), initialized_(false), allow_unknown_(true)
   {
     initialize(name, costmap, frame_id);
   }
@@ -636,8 +636,6 @@ namespace simple_local_planner{
         delete planner_;
     if (path_maker_)
         delete path_maker_;
-//    if (orientation_filter_)
-//      delete orientation_filter_;
   }
 
   void DijkstraPlanner::initialize(std::string name, costmap_2d::Costmap2D *costmap, std::string frame_id)
@@ -655,8 +653,7 @@ namespace simple_local_planner{
         planner_ = new DijkstraExpansion(p_calc_, cx, cy);
         planner_->setPreciseStart(true);
         path_maker_ = new GradientPath(p_calc_);
-//        orientation_filter_ = new OrientationFilter();
-        potential_array_ = nullptr;
+        orientation_filter_ = new OrientationFilter();
 
         private_nh.param("allow_unknown", allow_unknown_, false);
         planner_->setHasUnknown(allow_unknown_);
@@ -762,8 +759,7 @@ namespace simple_local_planner{
           if (potential[i] >= POT_HIGH)
           {
               grid.data[i] = -1;
-          }
-          else
+          } else
               grid.data[i] = potential[i] * publish_scale_ / max;
       }
       potential_pub_.publish(grid);
@@ -780,29 +776,29 @@ namespace simple_local_planner{
           return false;
       }
 
+      geometry_msgs::PoseStamped start_new;
+      geometry_msgs::PoseStamped goal_new;
+
+      this->getNearFreePoint(set_start,start_new,this->default_tolerance_);
+      this->getNearFreePoint(set_goal,goal_new,this->default_tolerance_);
+
       //clear the plan, just in case
       plan.clear();
 
       std::string global_frame = frame_id_;
 
       //until tf can handle transforming things that are way in the past... we'll require the goal to be in our global frame
-      if (set_goal.header.frame_id != global_frame)
+      if (goal_new.header.frame_id != global_frame)
       {
-          ROS_ERROR("The goal pose passed to this planner must be in the %s frame.  It is instead in the %s frame.", global_frame.c_str(), set_goal.header.frame_id.c_str());
+          ROS_ERROR("The goal pose passed to this planner must be in the %s frame.  It is instead in the %s frame.", global_frame.c_str(), goal_new.header.frame_id.c_str());
           return false;
       }
 
-      if (set_start.header.frame_id != global_frame)
+      if (start_new.header.frame_id != global_frame)
       {
-          ROS_ERROR("The start pose passed to this planner must be in the %s frame.  It is instead in the %s frame.", global_frame.c_str(), set_start.header.frame_id.c_str());
+          ROS_ERROR("The start pose passed to this planner must be in the %s frame.  It is instead in the %s frame.", global_frame.c_str(), start_new.header.frame_id.c_str());
           return false;
       }
-
-      geometry_msgs::PoseStamped start_new;
-      geometry_msgs::PoseStamped goal_new;
-
-      this->getNearFreePoint(set_start,start_new,this->default_tolerance_);
-      this->getNearFreePoint(set_goal,goal_new,this->default_tolerance_);
 
       double wx = start_new.pose.position.x;
       double wy = start_new.pose.position.y;
@@ -815,6 +811,7 @@ namespace simple_local_planner{
           ROS_WARN("The robot's start position is off the global costmap. Planning will always fail, are you sure the robot has been properly localized?");
           return false;
       }
+
       worldToMap(wx, wy, start_x, start_y);
 
       wx = goal_new.pose.position.x;
@@ -822,31 +819,23 @@ namespace simple_local_planner{
 
       if (!costmap_->worldToMap(wx, wy, goal_x_i, goal_y_i))
       {
-          ROS_WARN_THROTTLE(1.0,"local planner: The goal sent to the global planner is off the global costmap. Planning will always fail to this goal.");
+          ROS_WARN_THROTTLE(1.0,"The goal sent to the global planner is off the global costmap. Planning will always fail to this goal.");
           return false;
       }
       worldToMap(wx, wy, goal_x, goal_y);
 
       //clear the starting cell within the costmap because we know it can't be an obstacle
-//      clearRobotCell(start_new, start_x_i, start_y_i);
+      clearRobotCell(start_new, start_x_i, start_y_i);
 
-      int nx = static_cast<int>(costmap_->getSizeInCellsX()), ny = static_cast<int>(costmap_->getSizeInCellsY());
+      int nx = costmap_->getSizeInCellsX(), ny = costmap_->getSizeInCellsY();
 
       //make sure to resize the underlying array that Navfn uses
       p_calc_->setSize(nx, ny);
       planner_->setSize(nx, ny);
       path_maker_->setSize(nx, ny);
-      try
-      {
-        potential_array_ = new float[nx * ny];
-      }
-      catch (...)
-      {
-        ROS_ERROR("local planner new float[nx * ny] error.");
-        return false;
-      }
+      potential_array_ = new float[nx * ny];
 
-//      outlineMap(costmap_->getCharMap(), nx, ny, costmap_2d::LETHAL_OBSTACLE);
+      outlineMap(costmap_->getCharMap(), nx, ny, costmap_2d::LETHAL_OBSTACLE);
 
       uint8_t plan_timer = 0;
       planner_->setSafetyControl(true);
@@ -859,6 +848,8 @@ namespace simple_local_planner{
 
           planner_->clearEndpoint(costmap_->getCharMap(), potential_array_, goal_x_i, goal_y_i, 2);
 
+      //    this->publishPotential(potential_array_);
+
           if (found_legal)
           {
               //extract the plan
@@ -870,8 +861,17 @@ namespace simple_local_planner{
                   goal_copy.header.stamp = ros::Time::now();
                   plan.push_back(goal_copy);
               }
+              else
+              {
+                if(plan_timer == 1)
+                  ROS_ERROR("local planner: Failed to get a plan. This shouldn't happen.");
+              }
           }
-
+          else
+          {
+             if(plan_timer == 1)
+              ROS_ERROR("local planner:Failed to get a plan.");
+          }
           planner_->setSafetyControl(false);
           plan_timer++;
       }
@@ -882,11 +882,8 @@ namespace simple_local_planner{
         // add orientations if needed
         optimizationOrientation(plan);
         //orientation_filter_->processPath(start_new, plan);
-      }
-      if(potential_array_ != nullptr)
-      {
-        delete[] potential_array_;
-        potential_array_ = nullptr;
+        //publish the plan for visualization purposes
+        delete potential_array_;
       }
       return !plan.empty();
   }
@@ -957,7 +954,7 @@ namespace simple_local_planner{
       {
         x = static_cast<int>(mx) + i;
         y = static_cast<int>(my) + j;
-        if(this->costmap_->getCost(static_cast<unsigned int>(x), static_cast<unsigned int>(y)) != costmap_2d::FREE_SPACE)
+        if(this->costmap_->getCost(static_cast<unsigned int>(x),static_cast<unsigned int>(y)) != costmap_2d::FREE_SPACE)
           return false;
       }
     }
