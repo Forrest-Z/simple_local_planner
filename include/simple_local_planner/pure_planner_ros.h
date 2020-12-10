@@ -25,7 +25,12 @@
 #include <simple_local_planner/odometry_helper_ros.h>
 
 #include <dijkstra_planner.h>
-#include <eband_local_planner.h>
+#include <a_star.h>
+
+#include <fstream>
+#include <ctime>
+
+#define RECORD_LOG(x) {if(this->record_log_){this->log_<<x<<std::endl;}}
 
 namespace simple_local_planner {
   /**
@@ -88,6 +93,20 @@ namespace simple_local_planner {
         return sqrt( (x1-x2)*(x1-x2) + (y1-y2)*(y1-y2) );
       }
 
+      bool getLocalGoal(const tf2_ros::Buffer& tf,
+                        const std::vector<geometry_msgs::PoseStamped>& global_plan,
+                        const geometry_msgs::PoseStamped& robot_pose,
+                        const costmap_2d::Costmap2D& costmap,
+                        const std::string& global_frame,
+                        geometry_msgs::PoseStamped& local_goal);
+
+      bool getLocaPlan(const geometry_msgs::PoseStamped& global_pose,
+                       std::vector<geometry_msgs::PoseStamped>& local_plan);
+
+      bool getLocaGoal(const geometry_msgs::PoseStamped& global_pose,
+                       geometry_msgs::PoseStamped& local_goal,
+                       uint32_t count);
+
       bool transformGlobalPlan(
             const tf2_ros::Buffer& tf,
             const std::vector<geometry_msgs::PoseStamped>& global_plan,
@@ -101,7 +120,8 @@ namespace simple_local_planner {
                 std::vector<geometry_msgs::PoseStamped>& global_plan);
 
       void prunePlan(const geometry_msgs::PoseStamped& global_pose,
-                std::vector<geometry_msgs::PoseStamped>& plan);
+                     std::vector<geometry_msgs::PoseStamped>& plan,
+                     const tf2_ros::Buffer& tf);
 
 
       /**
@@ -124,13 +144,7 @@ namespace simple_local_planner {
       WorldModel* world_model_; ///< @brief The world model that the controller will use
       PurePlanner* tc_; ///< @brief The trajectory controller
       DijkstraPlanner* dp_; ///< @brief dijkstra local planner
-
-
-      boost::shared_ptr<EBandPlanner> eband_;
-      boost::shared_ptr<EBandVisualization> eband_visual_;
-      std::vector<int> plan_start_end_counter_;
-
-
+      A_star_planner* ap_;///< @brief a star local planner
       costmap_2d::Costmap2DROS* costmap_ros_; ///< @brief The ROS wrapper for the costmap the controller will use
       costmap_2d::Costmap2D* costmap_; ///< @brief The costmap the controller will use
       tf2_ros::Buffer* tf_;
@@ -160,6 +174,10 @@ namespace simple_local_planner {
       simple_local_planner::OdometryHelperRos odom_helper_;
       std::vector<geometry_msgs::Point> footprint_spec_;
       std::vector<geometry_msgs::PoseStamped> local_plan_;
+
+      bool record_;
+      std::ofstream log_;
+      bool record_log_;
   };
 };
 #endif

@@ -17,11 +17,6 @@ find_package(catkin REQUIRED
             geometry_msgs
             nav_msgs
             std_msgs
-
-            base_local_planner
-            tf2_eigen
-            tf2_geometry_msgs
-            tf2_ros
         )
 
 find_package(Boost REQUIRED
@@ -67,16 +62,12 @@ catkin_package(
     CATKIN_DEPENDS
         roscpp
         dynamic_reconfigure
+        #message_generation
         tf
         pluginlib
         costmap_2d
         nav_core
         angles
-
-        base_local_planner
-        tf2_eigen
-        tf2_geometry_msgs
-        tf2_ros
 )
 
 #uncomment for profiling
@@ -89,9 +80,6 @@ add_library(simple_local_planner
 	src/odometry_helper_ros.cpp
 	src/costmap_model.cpp
 	src/trajectory.cpp
-        src/conversions_and_types.cpp
-        src/eband_local_planner
-        src/eband_visualization
  )
 add_dependencies(simple_local_planner simple_local_planner_gencfg)
 add_dependencies(simple_local_planner simple_local_planner_gencpp)
@@ -104,15 +92,14 @@ target_link_libraries(simple_local_planner
     )
 
 add_library(pure_planner_ros
-            src/pure_planner.cpp
-            src/pure_planner_ros.cpp
-            src/dijkstra_planner.cpp
-            src/conversions_and_types.cpp
-            src/eband_local_planner
-            src/eband_visualization
-            )
+	src/pure_planner.cpp
+        src/pure_planner_ros.cpp
+        src/dijkstra_planner.cpp
+        src/a_star.cpp
+        src/path_optimization.cpp)
 add_dependencies(pure_planner_ros nav_msgs_gencpp)
-target_link_libraries(pure_planner_ros simple_local_planner)
+target_link_libraries(pure_planner_ros
+     simple_local_planner)
 
 #add_executable(point_grid src/point_grid.cpp)
 #target_link_libraries(point_grid ${catkin_LIBRARIES})

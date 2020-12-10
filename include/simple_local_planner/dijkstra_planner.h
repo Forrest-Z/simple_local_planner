@@ -30,7 +30,7 @@
 
 namespace simple_local_planner {
 
-#define PRIORITYBUFSIZE 10000
+#define PRIORITYBUFSIZE 100000
 #define POT_HIGH 1.0e10
 #define INVSQRT2 0.707106781
 
@@ -346,11 +346,10 @@ private:
     QuadraticCalculator* p_calc_;
     DijkstraExpansion* planner_;
     GradientPath* path_maker_;
-    OrientationFilter* orientation_filter_;
+//    OrientationFilter* orientation_filter_;
     ros::Publisher potential_pub_;
     int publish_scale_;
     double default_tolerance_;
-    unsigned char* cost_array_;
     unsigned int start_x_, start_y_;
     float* potential_array_;
     float convert_offset_;
